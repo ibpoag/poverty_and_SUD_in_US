@@ -1,0 +1,168 @@
+---
+title: "Final Class Project Analyses"
+author: "Benjamin Poag"
+date: '2022-04-29'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+# For modeling functions
+library(tidyverse)
+library(modelr)
+
+# For creating neat tables
+library(stargazer)
+
+# For creating and formatting plots
+library(ggplot2)
+library(ggpubr)
+library(visreg)
+
+# For mapping data
+library(maps)
+library(usmap)
+library(ggmap)
+```
+
+## Import dataset into R
+```{r}
+# Import CSV dataset
+US.county.data <- read.csv("US_county_data.csv")
+
+# Convert poverty column to numeric type
+US.county.data$poverty2020 <- as.numeric(US.county.data$poverty2020)
+```
+
+## Conduct regression analyses
+```{r}
+# Create regression model for alcohol use disorder mortalities with predictors
+AUD.reg <- lm(AUDmortality2014 ~ poverty2020 + female2020 + singleParent2020 + 
+                housingProblems2020 + unemployed2020 + HSgrad2020 + food2020, US.county.data)
+summary(AUD.reg)$coefficient
+stargazer(AUD.reg,
+          title="Table 1. Multiple Regression of AUD Mortality Rate on Poverty Rate",
+          dep.var.caption="DV: AUD Mortality Rate by County",
+          dep.var.labels = c("AUD"),
+          covariate.labels=c("% Poverty", "% Female", "% Single Parent Households", 
+                             "% with Housing Problems", "% Unemployed", "% High School Graduation", 
+                             "% Food Insecurity"),
+          notes.label="Significance levels",
+          type="html",
+          out="AUD_reg.htm")
+
+# Create regression model for substance use disorder mortalities with predictors
+SUD.reg <- lm(SUDmortality2014 ~ poverty2020 + female2020 + singleParent2020 + 
+                housingProblems2020 + unemployed2020 + HSgrad2020 + food2020, US.county.data)
+summary(SUD.reg)$coefficient
+stargazer(SUD.reg,
+          title="Table 2. Multiple Regression of SUD Mortality Rate on Poverty Rate",
+          dep.var.caption="DV: SUD Mortality Rate by County",
+          dep.var.labels = c("SUD"),
+          covariate.labels=c("% Poverty", "% Female", "% Single Parent Households", 
+                             "% with Housing Problems", "% Unemployed", "% High School Graduation", 
+                             "% Food Insecurity"),
+          notes.label="Significance levels",
+          type="html",
+          out="SUD_reg.htm")
+
+# Create regression model for frequent mental distress with predictors
+distress.reg <- lm(distress2020 ~ poverty2020 + female2020 + singleParent2020 + 
+                housingProblems2020 + unemployed2020 + HSgrad2020 + food2020, US.county.data)
+summary(distress.reg)$coefficient
+stargazer(distress.reg,
+          title="Table 3. Multiple Regression of Mental Distress on Poverty Rate",
+          dep.var.caption="DV: Frequent Mental Distress Rate by County",
+          dep.var.labels = c("Frequent Mental Distress"),
+          covariate.labels=c("% Poverty", "% Female", "% Single Parent Households", 
+                             "% with Housing Problems", "% Unemployed", "% High School Graduation", 
+                             "% Food Insecurity"),
+          notes.label="Significance levels",
+          type="html",
+          out="distress_reg.htm")
+
+```
+
+## Plot partial regressions of poverty
+```{r}
+# Create partial regression plots for each output
+
+## AUD mortality rates
+AUD.partial <- visreg(AUD.reg, "poverty2020", xlab = "Poverty Rate", 
+                      ylab = "AUD Mortality Rate", main = "Figure 2. Partial Regression for AUD and Poverty")
+
+## SUD mortality rates
+SUD.partial <- visreg(SUD.reg, "poverty2020", xlab = "Poverty Rate", 
+                      ylab = "SUD Mortality Rate", main = "Figure 3. Partial Regression for SUD and Poverty")
+
+## Frequent mental distress rates
+distress.partial <- visreg(distress.reg, "poverty2020", xlab = "Poverty Rate", 
+                      ylab = "Mental Distress Rate", main = "Figure 4. Partial Regression for Mental Distress and Poverty")
+
+```
+
+## Create U.S. map visualizations
+```{r}
+# Create county level visualization of the US
+us.mapdata <- us_map('county')
+
+# Format map
+map_theme <- theme(
+  axis.text = element_blank(),
+  axis.line = element_blank(),
+  axis.ticks = element_blank(),
+  panel.border = element_blank(),
+  panel.grid = element_blank(),
+  axis.title = element_blank()
+  )
+
+# Rename columns to match
+names(US.county.data)[names(US.county.data) == "state"] <- "full"
+
+# # fill in missing pieces on map
+# name1 <- unique(us.mapdata$county)
+# county.names <- character()
+# for (county in name1) {
+#   if (county %in% US.county.data$county) {
+#     county.names <- c(county.names, county)
+#   }
+# }
+# 
+# ## Check for what counties are different
+# setdiff(name1, county.names)
+# 
+# ## Adjust names in Excel file manually
+
+# Merge data to map data
+us.mapdata <- inner_join(us.mapdata, US.county.data, by = c("county", "full"))
+
+# Plot using ggplot
+pov <- ggplot(data = us.mapdata) + 
+  geom_polygon(aes(x = x, y = y, fill = poverty2020, group = group)) + 
+  coord_fixed(1.1) +
+  scale_fill_gradient(trans = "log10") +
+  map_theme
+
+AUD <- ggplot(data = us.mapdata) + 
+  geom_polygon(aes(x = x, y = y, fill = AUDmortality2014, group = group)) + 
+  coord_fixed(1.1) +
+  scale_fill_gradient(trans = "log10") +
+  map_theme
+
+SUD <- ggplot(data = us.mapdata) + 
+  geom_polygon(aes(x = x, y = y, fill = SUDmortality2014, group = group)) + 
+  coord_fixed(1.1) +
+  scale_fill_gradient(trans = "log10") +
+  map_theme
+
+dis <- ggplot(data = us.mapdata) + 
+  geom_polygon(aes(x = x, y = y, fill = distress2020, group = group)) + 
+  coord_fixed(1.1) +
+  scale_fill_gradient(trans = "log10") +
+  map_theme
+
+# Arrange plots in output
+ggarrange(pov, AUD, SUD, dis, 
+          labels = c("A", "B", "C", "D"),
+          ncol = 2, nrow = 2)
+
+```
